@@ -1,0 +1,2289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSLF Payment Tracker</title>
+<style>
+ @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap');
+ :root {
+ --bg: #0a0f1e;
+ --surface: #111827;
+ --surface2: #1a2535;
+ --border: #1e2d42;
+ --accent: #00d4ff;
+ --accent2: #7c3aed;
+ --warn: #f59e0b;
+ --text: #e2e8f0;
+ --muted: #64748b;
+ --qualifying: #10b981;
+ --nonqualifying: #ef4444;
+ }
+ * { box-sizing: border-box; margin: 0; padding: 0; }
+ body {
+ background: var(--bg);
+ color: var(--text);
+ font-family: 'DM Mono', monospace;
+ min-height: 100vh;
+ overflow-x: hidden;
+ }
+ body::before {
+ content: '';
+ position: fixed;
+ inset: 0;
+ background-image:
+ linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+ linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+ background-size: 40px 40px;
+ pointer-events: none;
+ z-index: 0;
+ }
+ .container {
+ max-width: 1100px;
+ margin: 0 auto;
+ padding: 28px 24px;
+ position: relative;
+ z-index: 1;
+ }
+ header {
+ display: flex;
+ align-items: flex-end;
+ justify-content: space-between;
+ margin-bottom: 48px;
+ flex-wrap: wrap;
+ gap: 16px;
+ }
+ .logo-area h1 {
+ font-family: 'Syne', sans-serif;
+ font-size: clamp(28px, 5vw, 44px);
+ font-weight: 800;
+ letter-spacing: -1px;
+ background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
+ -webkit-background-clip: text;
+ -webkit-text-fill-color: transparent;
+ background-clip: text;
+ line-height: 1;
+ }
+ .logo-area p { color: var(--muted); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; margin-top: 6px; }
+ .progress-ring-wrap { display: flex; align-items: center; gap: 16px; }
+ .ring-container { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+ .ring-container svg { transform: rotate(-90deg); }
+ .ring-bg { fill: none; stroke: var(--border); stroke-width: 6; }
+ .ring-progress {
+ fill: none; stroke-width: 6; stroke-linecap: round; stroke: url(#ringGrad);
+ transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1);
+ }
+ .ring-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+ .ring-num { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; line-height: 1; color: var(--accent); }
+ .ring-label { font-size: 8px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+ .ring-meta { text-align: left; }
+ .ring-meta strong { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 700; color: var(--text); }
+ .ring-meta small { display: block; font-size: 11px; color: var(--muted); }
+ .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 32px; }
+ .stat-card {
+ background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+ padding: 18px; position: relative; overflow: hidden; transition: border-color 0.2s;
+ }
+ .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--card-accent, var(--accent)); }
+ .stat-card:hover { border-color: var(--card-accent, var(--accent)); }
+ .stat-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+ .stat-value { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; line-height: 1; }
+ .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+ .section-header {
+ font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 3px;
+ text-transform: uppercase; color: var(--muted); margin-bottom: 16px;
+ display: flex; align-items: center; gap: 10px;
+ }
+ .section-header::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+ .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 24px; }
+ .chart-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 20px; }
+ .tooltip {
+ position: fixed; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+ padding: 10px 14px; font-size: 12px; pointer-events: none; z-index: 1000; display: none;
+ max-width: 220px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+ }
+ .tooltip-date { font-family: 'Syne', sans-serif; font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+ .tooltip-loan { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+ .tooltip-status { font-size: 11px; }
+ .tooltip-status.q { color: var(--qualifying); }
+ .tooltip-status.nq { color: var(--nonqualifying); }
+ .tooltip-status.p { color: var(--warn); }
+ .tooltip-details {
+ font-size: 11px;
+ color: var(--muted);
+ margin-top: 6px;
+ padding-top: 6px;
+ border-top: 1px solid var(--border);
+ line-height: 1.5;
+ max-width: 200px;
+ white-space: normal;
+ display: none;
+ }
+ .tooltip-details.visible { display: block; }
+ .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; }
+ .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+ .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+ .table-wrap { overflow-x: auto; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 24px; }
+ table { width: 100%; border-collapse: collapse; font-size: 13px; }
+ thead tr { background: var(--surface2); }
+ th { padding: 12px 16px; text-align: left; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 500; white-space: nowrap; }
+ td { padding: 11px 16px; border-top: 1px solid var(--border); color: var(--text); }
+ tr:hover td { background: var(--surface2); }
+ .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 500; }
+ .badge.q { background: rgba(16,185,129,0.15); color: var(--qualifying); border: 1px solid rgba(16,185,129,0.3); }
+ .badge.nq { background: rgba(239,68,68,0.15); color: var(--nonqualifying); border: 1px solid rgba(239,68,68,0.3); }
+ .badge.p { background: rgba(245,158,11,0.15); color: var(--warn); border: 1px solid rgba(245,158,11,0.3); }
+ .bookmarklet-panel, .import-panel {
+ background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 32px;
+ }
+ .bookmarklet-panel h3, .import-panel h3 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+ .bookmarklet-panel > p, .import-panel > p { color: var(--muted); font-size: 13px; line-height: 1.7; margin-bottom: 20px; }
+ .steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+ .step { display: flex; gap: 14px; align-items: flex-start; }
+ .step-num {
+ width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2));
+ display: flex; align-items: center; justify-content: center;
+ font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; flex-shrink: 0; color: #000;
+ }
+ .step-text { font-size: 13px; color: var(--text); line-height: 1.6; padding-top: 3px; }
+ .step-text code { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-size: 12px; color: var(--accent); }
+ .btn-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+ .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 10px; font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.2s; text-decoration: none; }
+ .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #000; font-weight: 600; }
+ .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+ .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+ .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+ .bookmarklet-link {
+ display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 10px;
+ background: linear-gradient(135deg, var(--accent2), var(--accent)); color: #fff;
+ font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 600;
+ cursor: grab; text-decoration: none; border: none; transition: all 0.2s; user-select: none;
+ }
+ .bookmarklet-link:hover { opacity: 0.9; transform: translateY(-1px); }
+ .drag-hint { font-size: 11px; color: var(--muted); margin-top: 10px; }
+ textarea {
+ width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+ color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 14px;
+ resize: vertical; min-height: 120px; outline: none; transition: border-color 0.2s; margin-bottom: 12px;
+ }
+ textarea:focus { border-color: var(--accent); }
+ .loan-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+ .loan-pill {
+ padding: 5px 14px; border-radius: 20px; font-size: 11px; cursor: pointer;
+ border: 1px solid var(--border); background: transparent; color: var(--muted);
+ font-family: 'DM Mono', monospace; transition: all 0.15s;
+ }
+ .loan-pill.active { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+ #dashboard { }
+ .year-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+ .year-label { font-size: 10px; color: var(--muted); width: 36px; flex-shrink: 0; text-align: right; }
+ .year-cells { display: flex; gap: 4px; flex: 1; }
+ .pay-cell {
+ flex: 1; aspect-ratio: 1; border-radius: 3px; cursor: pointer;
+ transition: transform 0.15s; position: relative; min-width: 0;
+ }
+ .pay-cell:hover { transform: scale(1.3); z-index: 10; }
+ .pay-cell.qualifying { background: var(--qualifying); }
+ .pay-cell.non-qualifying { background: var(--nonqualifying); opacity: 0.6; }
+ .pay-cell.pending { background: var(--warn); }
+ .pay-cell.future { background: var(--border); opacity: 0.15; }
+ .month-header { display: flex; gap: 4px; margin-left: 44px; margin-bottom: 6px; }
+ .month-header span { flex: 1; text-align: center; font-size: 9px; color: var(--muted); }
+ .projection-note { font-size: 11px; color: var(--muted); margin-top: 12px; padding: 10px 14px; background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.1); border-radius: 8px; }
+ select { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 8px 12px; outline: none; cursor: pointer; }
+ select:focus { border-color: var(--accent); }
+ .filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+ .filter-label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+ .pay-cell.buyback-selected {
+ background: var(--accent) !important;
+ opacity: 1 !important;
+ box-shadow: inset 0 0 0 1.5px rgba(0,0,0,0.35);
+ transform: none !important;
+ z-index: 5;
+ cursor: crosshair;
+ }
+ .pay-cell.non-qualifying:not(.buyback-selected) { cursor: crosshair; }
+ .buyback-panel {
+ background: var(--surface);
+ border: 1px solid rgba(249,115,22,0.3);
+ border-radius: 16px;
+ padding: 28px;
+ margin-bottom: 32px;
+ }
+ .buyback-panel h3 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+ .buyback-panel > .sub { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
+ .buyback-instruction {
+ display: flex; align-items: flex-start; gap: 10px;
+ background: rgba(249,115,22,0.07); border: 1px solid rgba(249,115,22,0.2);
+ border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; font-size: 12px; color: var(--muted);
+ }
+ .buyback-instruction strong { color: #f97316; }
+ .buyback-selected-list {
+ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; min-height: 32px;
+ }
+ .buyback-chip {
+ display: inline-flex; align-items: center; gap: 6px;
+ background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.35);
+ border-radius: 20px; padding: 3px 10px; font-size: 11px; color: var(--accent);
+ }
+ .buyback-chip button {
+ background: none; border: none; color: var(--accent); cursor: pointer;
+ font-size: 13px; line-height: 1; padding: 0; opacity: 0.7;
+ }
+ .buyback-chip button:hover { opacity: 1; }
+ .buyback-inputs {
+ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+ gap: 14px; margin-bottom: 20px;
+ }
+ .buyback-field label { display: block; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+ .buyback-field input {
+ width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+ color: var(--text); font-family: 'DM Mono', monospace; font-size: 13px;
+ padding: 10px 12px; outline: none; transition: border-color 0.2s;
+ }
+ .buyback-field input:focus { border-color: #f97316; }
+ .buyback-field .hint { font-size: 10px; color: var(--muted); margin-top: 4px; }
+ .buyback-result {
+ background: var(--surface2); border-radius: 12px; padding: 18px;
+ margin-bottom: 20px; display: none;
+ }
+ .buyback-result.visible { display: block; }
+ .buyback-result-grid {
+ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
+ }
+ .buyback-stat { }
+ .buyback-stat-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+ .buyback-stat-value { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; }
+ .buyback-eligibility {
+ margin-top: 14px; padding: 10px 14px; border-radius: 8px; font-size: 12px; line-height: 1.6;
+ }
+ .buyback-eligibility.eligible { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); color: var(--qualifying); }
+ .buyback-eligibility.not-eligible { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: var(--nonqualifying); }
+ .buyback-eligibility.maybe { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); color: var(--warn); }
+ .buyback-eligibility strong { display: block; font-size: 13px; margin-bottom: 4px; }
+
+  .st{padding:10px 14px;} .st-r{padding:10px 14px;text-align:right;}
+
+ /* ── Export / Print ──────────────────────────────────────────────────────── */
+ .export-panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 24px; margin-bottom: 24px;
+ }
+ .export-panel h3 { font-family: 'Syne',sans-serif; font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+ .export-panel .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; line-height: 1.5; }
+ .export-options { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+ .export-opt {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 14px; cursor: pointer; font-size: 13px; user-select: none;
+  transition: border-color 0.15s;
+ }
+ .export-opt:hover { border-color: var(--accent); }
+ .export-opt input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+ .export-opt.checked { border-color: var(--accent); background: rgba(0,212,255,0.06); color: var(--accent); }
+
+ /* Print grid layout and colors — defined outside @media print so browsers don't suppress them */
+ .print-grid-wrap { margin-top: 8px; }
+ .print-year-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+ .print-year-label { font-size: 9px; color: #888; width: 32px; text-align: right; flex-shrink: 0; }
+ .print-year-cells { display: flex; gap: 3px; flex: 1; }
+ .print-month-header { display: flex; gap: 3px; margin-left: 38px; margin-bottom: 3px; }
+ .print-month-header span { flex: 1; text-align: center; font-size: 7px; color: #aaa; }
+ .print-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 10px; color: #555; }
+ .print-legend-item { display: flex; align-items: center; gap: 4px; }
+ .print-legend-dot { width: 10px; height: 10px; border-radius: 2px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+ .print-cell { flex: 1; height: 18px; border-radius: 2px; border: 1px solid rgba(0,0,0,0.1); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+ .print-cell.q { background: #10b981 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+ .print-cell.nq { background: #ef4444 !important; opacity: 0.6; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+ .print-cell.pend { background: #f59e0b !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+ .print-cell.fut { background: #e5e7eb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+ .print-cell.bk { background: #3b82f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+ @media print {
+  #stickyNav { display: none !important; }
+
+  /* Hide everything by default */
+  body * { visibility: hidden; }
+  /* Show only the print wrapper */
+  #printArea, #printArea * { visibility: visible; }
+  #printArea { position: absolute; left: 0; top: 0; width: 100%; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Force light background for readability */
+  #printArea { background: white !important; color: #111 !important; font-family: Georgia, serif; }
+  .print-header { margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 12px; }
+  .print-header h1 { font-size: 22px; font-weight: 800; color: #111; margin: 0 0 4px; }
+  .print-header p { font-size: 12px; color: #555; margin: 0; }
+  .print-section { margin-bottom: 28px; page-break-inside: avoid; }
+  .print-section h2 { font-size: 14px; font-weight: 700; text-transform: uppercase;
+   letter-spacing: 1.5px; color: #333; border-bottom: 1px solid #ccc;
+   padding-bottom: 4px; margin-bottom: 12px; }
+  .print-stat-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
+  .print-stat { flex: 1; min-width: 100px; padding: 10px 14px;
+   border: 1px solid #ddd; border-radius: 8px; }
+  .print-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #777; }
+  .print-stat-value { font-size: 24px; font-weight: 800; color: #111; }
+  .print-stat-sub { font-size: 11px; color: #777; }
+  .print-proj { background: #f5f5f5; border: 1px solid #ddd; border-radius: 8px;
+   padding: 12px 16px; font-size: 12px; color: #333; line-height: 1.8; }
+
+  /* Data table */
+  .print-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .print-table th { background: #f0f0f0; padding: 5px 8px; text-align: left;
+   font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #666; border-bottom: 1px solid #ccc; }
+  .print-table td { padding: 4px 8px; border-bottom: 1px solid #eee; }
+  .print-table tr:nth-child(even) td { background: #fafafa; }
+  .print-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+  .print-badge.q { background: #d1fae5; color: #065f46; }
+  .print-badge.nq { background: #fee2e2; color: #991b1b; }
+  .print-badge.pend { background: #fef3c7; color: #92400e; }
+ }
+
+
+ [id^="sec-"] { scroll-margin-top: 60px; }
+ /* ── Sticky Nav ──────────────────────────────────────────────────────────── */
+ #stickyNav {
+  position: sticky; top: 0; z-index: 200;
+  background: rgba(10,15,30,0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 24px; gap: 0;
+ }
+ #stickyNav .nav-brand {
+  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px;
+  background: linear-gradient(135deg,#00d4ff,#7c3aed);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  padding: 13px 16px 13px 0; margin-right: 4px;
+  white-space: nowrap; flex-shrink: 0;
+ }
+ #stickyNav .nav-divider {
+  width: 1px; height: 20px; background: var(--border); margin-right: 4px; flex-shrink: 0;
+ }
+ #stickyNav .nav-items {
+  display: flex; align-items: center; gap: 2px; flex: 1; overflow-x: auto;
+  scrollbar-width: none; -ms-overflow-style: none;
+ }
+ #stickyNav .nav-items::-webkit-scrollbar { display: none; }
+ .nav-btn {
+  background: none; border: 1px solid transparent; border-radius: 20px;
+  cursor: pointer; padding: 5px 12px;
+  color: var(--muted); font-family: 'DM Mono', monospace; font-size: 11px;
+  white-space: nowrap; transition: all 0.15s; flex-shrink: 0;
+  display: flex; align-items: center; gap: 5px;
+ }
+ .nav-btn:hover { color: var(--text); border-color: var(--border); background: var(--surface2); }
+ .nav-btn.active {
+  color: var(--accent); border-color: rgba(0,212,255,0.4);
+  background: rgba(0,212,255,0.07);
+ }
+  #stickyNav .nav-ring {
+  display: none; align-items: center; gap: 8px;
+  margin-left: 12px; padding-left: 12px;
+  border-left: 1px solid var(--border); flex-shrink: 0;
+ }
+ #stickyNav .nav-ring { display: flex; }
+ .nav-ring-num { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 13px; color: var(--accent); line-height: 1; }
+ .nav-ring-sub { font-size: 9px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+ @media (max-width: 600px) {
+  #stickyNav .nav-brand { font-size: 13px; padding-right: 8px; }
+  .nav-btn { font-size: 10px; padding: 4px 9px; }
+ }
+
+ /* ── Import Tabs ─────────────────────────────────────────────────────────── */
+ .import-tabs { display: flex; gap: 4px; margin-bottom: 0; flex-wrap: wrap; }
+ .import-tab {
+  padding: 8px 16px; border-radius: 10px 10px 0 0; border: 1px solid var(--border);
+  border-bottom: none; background: var(--surface2); color: var(--muted);
+  font-family: 'DM Mono', monospace; font-size: 12px; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+ }
+ .import-tab:hover { color: var(--text); }
+ .import-tab.active {
+  background: var(--surface); color: var(--accent);
+  border-color: var(--border); border-bottom-color: var(--surface);
+  position: relative; z-index: 1;
+ }
+ .import-tab-panel {
+  display: none; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 0 10px 10px 10px; padding: 24px; margin-bottom: 32px;
+ }
+ .import-tab-panel.active { display: block; }
+ .import-tab-panel h3 { font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+ .import-tab-panel > p { color: var(--muted); font-size: 13px; line-height: 1.7; margin-bottom: 20px; }
+ .method-badge {
+  display: inline-block; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 4px; font-weight: 600; margin-bottom: 14px;
+ }
+ .method-badge.desktop { background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid rgba(0,212,255,0.25); }
+ .method-badge.mobile { background: rgba(16,185,129,0.1); color: var(--qualifying); border: 1px solid rgba(16,185,129,0.25); }
+ .method-badge.any { background: rgba(124,58,237,0.1); color: #a78bfa; border: 1px solid rgba(124,58,237,0.25); }
+ .file-drop-zone {
+  border: 2px dashed var(--border); border-radius: 12px; padding: 32px 24px;
+  text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 16px;
+ }
+ .file-drop-zone:hover, .file-drop-zone.dragover {
+  border-color: var(--accent); background: rgba(0,212,255,0.04);
+ }
+ .file-drop-zone .drop-icon { font-size: 32px; margin-bottom: 8px; }
+ .file-drop-zone .drop-text { font-size: 13px; color: var(--muted); line-height: 1.6; }
+ .file-drop-zone .drop-text strong { color: var(--text); }
+ #csvFileInput, #jsonFileInput { display: none; }
+</style>
+</head>
+<body>
+
+<div id="printArea" style="display:none"></div>
+<div class="tooltip" id="tooltip">
+  <div class="tooltip-date" id="tt-date"></div>
+  <div class="tooltip-loan" id="tt-loan"></div>
+  <div class="tooltip-status" id="tt-status"></div>
+  <div class="tooltip-details" id="tt-details"></div>
+</div>
+
+<nav id="stickyNav">
+  <span class="nav-brand">PSLF Tracker</span>
+  <div class="nav-divider"></div>
+  <div class="nav-items">
+    <button class="nav-btn active" data-sec="sec-scraper" onclick="navTo('sec-scraper')">🔖 Get Data</button>
+    <button class="nav-btn" data-sec="sec-import" onclick="navTo('sec-import')">📋 Import</button>
+    <button class="nav-btn" data-sec="sec-overview" onclick="navTo('sec-overview')">📊 Overview</button>
+    <button class="nav-btn" data-sec="sec-journey" onclick="navTo('sec-journey')">🗓 Journey</button>
+    <button class="nav-btn" data-sec="sec-buyback" onclick="navTo('sec-buyback')">🔄 Buyback</button>
+    <button class="nav-btn" data-sec="sec-detail" onclick="navTo('sec-detail')">📋 Detail</button>
+    <button class="nav-btn" data-sec="sec-export" onclick="navTo('sec-export')">📤 Export</button>
+  </div>
+  <div class="nav-ring">
+    <svg width="36" height="36" viewBox="0 0 36 36" style="transform:rotate(-90deg);flex-shrink:0">
+      <defs>
+        <linearGradient id="navRingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:#00d4ff"/>
+          <stop offset="100%" style="stop-color:#7c3aed"/>
+        </linearGradient>
+      </defs>
+      <circle cx="18" cy="18" r="14" fill="none" stroke="#1e2d42" stroke-width="4"/>
+      <circle id="navRingCircle" cx="18" cy="18" r="14" fill="none"
+        stroke="url(#navRingGrad)" stroke-width="4" stroke-linecap="round"
+        stroke-dasharray="87.96" stroke-dashoffset="87.96"/>
+    </svg>
+    <div>
+      <div class="nav-ring-num"><span id="navRingFraction">0/120</span></div>
+      <div class="nav-ring-sub">qualifying</div>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+  <header>
+    <div class="logo-area">
+      <h1>PSLF Tracker</h1>
+      <p>Public Service Loan Forgiveness · Payment History</p>
+    </div>
+    <div class="progress-ring-wrap" id="progressWrap">
+      <div class="ring-container">
+        <svg width="80" height="80" viewBox="0 0 80 80">
+          <defs>
+            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#00d4ff"/>
+              <stop offset="100%" style="stop-color:#7c3aed"/>
+            </linearGradient>
+          </defs>
+          <circle class="ring-bg" cx="40" cy="40" r="34"/>
+          <circle class="ring-progress" id="ringCircle" cx="40" cy="40" r="34"
+            stroke-dasharray="213.6" stroke-dashoffset="213.6"/>
+        </svg>
+        <div class="ring-text">
+          <span class="ring-num" id="ringPct">0%</span>
+          <span class="ring-label">done</span>
+        </div>
+      </div>
+      <div class="ring-meta">
+        <strong id="ringFraction">0/120</strong>
+        <small>qualifying payments</small>
+        <small id="ringRemaining" style="color:var(--accent);margin-top:2px;"></small>
+      </div>
+    </div>
+  </header>
+
+  <!-- Import — tabbed -->
+  <div id="sec-scraper"></div>
+  <div id="sec-import"></div>
+  <p class="section-header">Step 1 — Import Your Data</p>
+
+  <div class="import-tabs">
+    <button class="import-tab active" onclick="switchTab('tab-bookmarklet',this)">🖥️ Desktop Bookmarklet</button>
+    <button class="import-tab" onclick="switchTab('tab-mobile',this)">📱 Mobile / Manual</button>
+    <button class="import-tab" onclick="switchTab('tab-file',this)">📂 Upload File</button>
+  </div>
+
+  <!-- Tab: Desktop Bookmarklet -->
+  <div id="tab-bookmarklet" class="import-tab-panel active">
+    <span class="method-badge desktop">Desktop · Chrome / Firefox / Safari</span>
+    <h3>🔖 Auto-Scraper Bookmarklet</h3>
+    <p>The fastest method on desktop. The bookmarklet auto-pages through all your payment history on studentaid.gov and copies the data to your clipboard.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Drag the button below to your browser's bookmarks bar (or right-click → Bookmark this link)</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Log in to <strong>studentaid.gov</strong> → navigate to your <strong>PSLF Payment History</strong> page — <strong style="color:var(--warn)">⚠️ remove any active loan filters first</strong></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Click the bookmarklet — it pages through everything automatically (~15–30 sec) and copies JSON to your clipboard</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Return here and paste below, then click <code>Load Data</code></div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <a id="bookmarkletLink" class="bookmarklet-link" href="#">📊 PSLF Scraper</a>
+      <span style="font-size:12px;color:var(--muted)">← drag to bookmarks bar</span>
+    </div>
+    <div class="drag-hint">⚠️ Only works on the studentaid.gov PSLF payment history page.</div>
+    <div style="margin-top:20px">
+      <textarea id="jsonInput" placeholder="Paste bookmarklet JSON output here…"></textarea>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn btn-primary" onclick="loadData()">Load Data</button>
+        <button class="btn btn-outline" onclick="loadSample()">Load Sample Data</button>
+        <button class="btn btn-outline" onclick="clearData()">Clear</button>
+      </div>
+      <div id="importError" style="color:var(--nonqualifying);font-size:12px;margin-top:10px;display:none;"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Mobile / Manual copy-paste -->
+  <div id="tab-mobile" class="import-tab-panel">
+    <span class="method-badge mobile">Mobile · iOS Safari / Android Chrome</span>
+    <h3>📱 Mobile Copy-Paste</h3>
+    <p>No bookmarklet needed. On your phone, copy the visible text from the PSLF Payment History page — the tracker will parse it automatically. Works page by page.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">On your phone, open <strong>studentaid.gov</strong> → log in → go to your <strong>PSLF Payment History</strong> page</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Long-press on the page text → <strong>Select All</strong> → <strong>Copy</strong></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Open this tracker and paste below. Repeat for each page of payment history — the tracker merges them automatically</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Click <code>Parse &amp; Load</code>. The tracker detects the copied format automatically</div>
+      </div>
+    </div>
+    <textarea id="mobileInput" placeholder="Paste copied page text from studentaid.gov here…" style="min-height:140px"></textarea>
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-primary" onclick="loadMobileText()">Parse &amp; Load</button>
+      <button class="btn btn-primary" onclick="loadMobileText(true)">➕ Merge with Existing</button>
+      <button class="btn btn-outline" onclick="document.getElementById('mobileInput').value=''">Clear</button>
+    </div>
+    <div id="mobileError" style="color:var(--nonqualifying);font-size:12px;margin-top:10px;display:none;"></div>
+    <div id="mobileSuccess" style="color:var(--qualifying);font-size:12px;margin-top:10px;display:none;"></div>
+    <div style="margin-top:16px;padding:12px 16px;background:var(--surface2);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.7">
+      💡 <strong style="color:var(--text)">Tip:</strong> The page text parser looks for loan names, month/year periods, and status words (Qualifying, Non-Qualifying, Pending). It handles messy copied text gracefully. If a page doesn't parse well, try scrolling to load all rows first.
+    </div>
+  </div>
+
+  <!-- Tab: File upload -->
+  <div id="tab-file" class="import-tab-panel">
+    <span class="method-badge any">Desktop &amp; Mobile · Any device</span>
+    <h3>📂 Upload File</h3>
+    <p>Upload a previously exported JSON file from this tracker, or a CSV you've created manually. Works on any device including mobile.</p>
+    <div class="file-drop-zone" id="dropZone"
+      onclick="document.getElementById('jsonFileInput').click()"
+      ondragover="event.preventDefault();this.classList.add('dragover')"
+      ondragleave="this.classList.remove('dragover')"
+      ondrop="handleFileDrop(event)">
+      <div class="drop-icon">📁</div>
+      <div class="drop-text">
+        <strong>Tap or click to choose a file</strong><br>
+        Drag &amp; drop also works on desktop<br>
+        <span style="font-size:11px">Accepts: .json (tracker export) · .csv (manual)</span>
+      </div>
+    </div>
+    <input type="file" id="jsonFileInput" accept=".json,.csv,.txt" onchange="handleFileSelect(event)">
+    <div id="fileError" style="color:var(--nonqualifying);font-size:12px;margin-top:10px;display:none;"></div>
+    <div id="fileSuccess" style="color:var(--qualifying);font-size:12px;margin-top:10px;display:none;"></div>
+    <div style="margin-top:16px;padding:12px 16px;background:var(--surface2);border-radius:10px;font-size:11px;color:var(--muted);line-height:1.7">
+      💡 <strong style="color:var(--text)">CSV format:</strong> Columns should be <code style="color:var(--accent)">loan, period, status, details</code> — status values: <code style="color:var(--qualifying)">qualifying</code> · <code style="color:var(--nonqualifying)">non-qualifying</code> · <code style="color:var(--warn)">pending</code>. Period format: <code style="color:var(--accent)">MM/YYYY</code>.
+      <br><br>
+      <button class="btn btn-outline" style="padding:6px 14px;font-size:11px;margin-top:4px" onclick="downloadCSVTemplate()">⬇️ Download CSV Template</button>
+    </div>
+  </div>
+
+  <!-- Add Loan -->
+  <div id="addLoanSection">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;cursor:pointer;" onclick="toggleAddLoan()">
+      <p class="section-header" style="margin-bottom:0;flex:1">Add More Loans</p>
+      <button id="addLoanToggleBtn" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;padding:4px 12px;cursor:pointer;white-space:nowrap;">▶ Expand</button>
+    </div>
+    <div id="addLoanBody" style="display:none">
+      <div class="import-panel">
+        <h3>➕ Add Loan Data</h3>
+        <p>Run the bookmarklet again on studentaid.gov — this time filtered to a specific loan — then paste the JSON here to merge it in. Each paste adds to, not replaces, your existing data.</p>
+        <textarea id="addLoanInput" placeholder="Paste additional loan JSON here..."></textarea>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="addLoanData()">Add to Tracker</button>
+          <button class="btn btn-outline" onclick="document.getElementById('addLoanInput').value=''">Clear</button>
+        </div>
+        <div id="addLoanError" style="color:var(--nonqualifying);font-size:12px;margin-top:10px;display:none;"></div>
+        <div id="addLoanSuccess" style="color:var(--qualifying);font-size:12px;margin-top:10px;display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard">
+
+    <div id="sec-overview"></div>
+    <p class="section-header">Overview</p>
+    <div class="stats-row">
+      <div class="stat-card" style="--card-accent:var(--qualifying)">
+        <div class="stat-label">Qualifying</div>
+        <div class="stat-value" id="statQ" style="color:var(--qualifying)">0</div>
+        <div class="stat-sub">of 120 needed</div>
+      </div>
+      <div class="stat-card" style="--card-accent:var(--nonqualifying)">
+        <div class="stat-label">Non-Qualifying</div>
+        <div class="stat-value" id="statNQ" style="color:var(--nonqualifying)">0</div>
+        <div class="stat-sub">payments</div>
+      </div>
+      <div class="stat-card" style="--card-accent:var(--warn)">
+        <div class="stat-label">Pending Cert.</div>
+        <div class="stat-value" id="statP" style="color:var(--warn)">0</div>
+        <div class="stat-sub">not yet certified</div>
+      </div>
+      <div class="stat-card" style="--card-accent:var(--accent)">
+        <div class="stat-label">Remaining</div>
+        <div class="stat-value" id="statRem" style="color:var(--accent)">120</div>
+        <div class="stat-sub">to forgiveness</div>
+      </div>
+      <div class="stat-card" style="--card-accent:var(--accent2)">
+        <div class="stat-label">Est. Forgiveness</div>
+        <div class="stat-value" id="statDate" style="color:var(--accent2);font-size:18px">—</div>
+        <div class="stat-sub">projected date</div>
+      </div>
+    </div>
+
+    <div id="sec-journey"></div>
+    <p class="section-header">120-Payment Journey</p>
+    <div class="chart-card">
+      <div class="chart-title">Payment Progress — 10 years × 12 months = 120 qualifying payments</div>
+      <div class="filter-row">
+        <span class="filter-label">Loan:</span>
+        <div class="loan-filter" id="loanFilter"></div>
+      </div>
+      <div id="allLoansOverview" style="display:none;margin-bottom:8px;"></div>
+      <div id="singleLoanGrid">
+        <div class="month-header" id="monthHeader"></div>
+        <div id="timelineGrid"></div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--qualifying)"></div>Qualifying</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>Pending Certification</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--nonqualifying)"></div>Non-Qualifying</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--border);opacity:0.6"></div>Future</div>
+      </div>
+      <div class="projection-note" id="projectionNote"></div>
+    </div>
+
+    <div id="sec-buyback"></div>
+    <p class="section-header">PSLF Buyback Planner</p>
+    <div class="buyback-panel" id="buybackPanelEl">
+      <h3>🔄 PSLF Buyback Calculator</h3>
+      <p class="sub">Select non-qualifying months on the 120-Payment Journey grid above to model buying them back. Buyback lets you convert periods of deferment/forbearance into qualifying payments by paying a lump sum equal to what your IDR payment would have been — but only if doing so brings you to 120 qualifying payments.</p>
+      <div class="buyback-instruction">
+        <span>💡</span>
+        <span><strong>Click any red (non-qualifying) cell</strong> in the payment grid above to select it for buyback. Click again to deselect.</span>
+      </div>
+      <div class="buyback-selected-list" id="buybackChips">
+        <span style="font-size:12px;color:var(--muted);align-self:center">No months selected — click red cells in the grid above</span>
+      </div>
+      <div class="buyback-inputs">
+        <div class="buyback-field">
+          <label>Monthly IDR Payment (before/after period)</label>
+          <input type="number" id="buybackIDR" placeholder="e.g. 250" min="0" oninput="recalcBuyback()">
+          <div class="hint">Use the lower of your IDR payment immediately before or after the buyback period. Leave blank to see counts only.</div>
+        </div>
+        <div class="buyback-field">
+          <label>Current Qualifying Count (certified)</label>
+          <input type="number" id="buybackCurrentQ" placeholder="Auto-filled from data" min="0" oninput="recalcBuyback()">
+          <div class="hint">Auto-filled from your loaded data. Edit if your servicer-certified count differs.</div>
+        </div>
+      </div>
+      <div class="buyback-result" id="buybackResult">
+        <div class="buyback-result-grid">
+          <div class="buyback-stat">
+            <div class="buyback-stat-label">Months Selected</div>
+            <div class="buyback-stat-value" id="bkMonths" style="color:var(--accent)">0</div>
+          </div>
+          <div class="buyback-stat">
+            <div class="buyback-stat-label">Est. Lump Sum</div>
+            <div class="buyback-stat-value" id="bkCost" style="color:var(--warn)">—</div>
+          </div>
+          <div class="buyback-stat">
+            <div class="buyback-stat-label">New Total (w/ pending)</div>
+            <div class="buyback-stat-value" id="bkNewTotal" style="color:var(--qualifying)">—</div>
+          </div>
+          <div class="buyback-stat">
+            <div class="buyback-stat-label">Still Needed</div>
+            <div class="buyback-stat-value" id="bkStillNeeded" style="color:var(--accent)">—</div>
+            <div id="bkProjectedDate" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--accent);line-height:1.1;"></div>
+          </div>
+        </div>
+        <div class="buyback-eligibility" id="bkEligibility"></div>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-primary" onclick="autoSelectBuyback()" title="Scans your payment details for deferment/forbearance codes and selects likely eligible months">✨ Auto-Select Likely Eligible</button>
+        <button class="btn btn-outline" onclick="clearBuybackSelection()" style="border-color:rgba(0,212,255,0.35);color:var(--accent)">Clear Selection</button>
+      </div>
+      <div id="bkAutoResult" style="display:none;margin-top:14px;padding:12px 16px;border-radius:10px;font-size:12px;line-height:1.7;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.25);color:var(--text);"></div>
+    </div>
+
+    <div id="sec-detail"></div>
+    <p class="section-header">Payment Detail</p>
+    <div class="filter-row">
+      <span class="filter-label">Show:</span>
+      <select id="tableFilter" onchange="tablePage=1;renderTable()">
+        <option value="all">All Payments</option>
+        <option value="qualifying">Qualifying Only</option>
+        <option value="non-qualifying">Non-Qualifying Only</option>
+        <option value="pending">Pending Only</option>
+      </select>
+      <span class="filter-label">Loan:</span>
+      <select id="tableLoanFilter" onchange="tablePage=1;renderTable()">
+        <option value="all">All Loans</option>
+      </select>
+      <span class="filter-label">Per page:</span>
+      <select id="tablePageSize" onchange="tablePage=1;renderTable()">
+        <option value="10">10</option>
+        <option value="20">20</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="all">All</option>
+      </select>
+      <span class="filter-label" style="margin-left:auto" id="tableCount"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Period</th>
+            <th>Loan</th>
+            <th>Status</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div id="tablePagination" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:10px;"></div>
+
+    <div id="sec-export"></div>
+    <p class="section-header" id="exportSectionHeader">Export</p>
+    <div class="export-panel" id="exportPanel">
+      <h3>📤 Export Report</h3>
+      <p class="sub">Choose what to include, then print to PDF using your browser's print dialog — or download your raw data as JSON.</p>
+      <div class="export-options" id="exportOptions">
+        <label class="export-opt checked" id="optOverview">
+          <input type="checkbox" checked onchange="toggleExportOpt(this,'optOverview')"> Overview Stats
+        </label>
+        <label class="export-opt checked" id="optGrid">
+          <input type="checkbox" checked onchange="toggleExportOpt(this,'optGrid')"> Payment Grid
+        </label>
+        <label class="export-opt checked" id="optConservative">
+          <input type="checkbox" checked onchange="toggleExportOpt(this,'optConservative')"> Conservative Projection
+        </label>
+        <label class="export-opt checked" id="optOptimistic">
+          <input type="checkbox" checked onchange="toggleExportOpt(this,'optOptimistic')"> If Pending Certified
+        </label>
+        <label class="export-opt checked" id="optBuyback">
+          <input type="checkbox" checked onchange="toggleExportOpt(this,'optBuyback')"> Buyback Projection
+        </label>
+        <label class="export-opt" id="optTable">
+          <input type="checkbox" onchange="toggleExportOpt(this,'optTable')"> Payment Detail Table
+        </label>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="printReport()">🖨️ Print / Save as PDF</button>
+        <button class="btn btn-outline" onclick="downloadJSON()">⬇️ Download Raw JSON</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+const bookmarkletCode = `(function(){
+  if(window.__pslfRunning){alert('PSLF Scraper is already running, please wait...');return;}
+  window.__pslfRunning=true;
+
+  async function run(){
+    var all=[], seen=new Set();
+
+    function getStatus(row){
+      if(row.querySelector('.green-dot')) return 'qualifying';
+      if(row.querySelector('.green-circle')) return 'pending';
+      if(row.querySelector('.red-dot')) return 'non-qualifying';
+      var cells=row.querySelectorAll('td');
+      var t=cells.length>=3?(cells[2].innerText||''):'';
+      if(/non.qualifying|ineligible/i.test(t)) return 'non-qualifying';
+      if(/qualifying/i.test(t)) return 'qualifying';
+      return 'pending';
+    }
+
+    function harvest(){
+      var rows=document.querySelectorAll('tr.main-table-row');
+      rows.forEach(function(row){
+        var cells=row.querySelectorAll('td');
+        if(cells.length<3) return;
+        var loan=(cells[0].innerText||'').trim();
+        var period=(cells[1].innerText||'').trim();
+        if(!loan||!period||!/\\d{1,2}\\/\\d{4}/.test(period)) return;
+        var key=loan+'||'+period;
+        if(seen.has(key)) return;
+        seen.add(key);
+        var status=getStatus(row);
+        var details='';
+        var sib=row.nextElementSibling;
+        if(sib&&(sib.hidden||sib.classList.contains('hidden-table-row'))){
+          details=(sib.innerText||'').replace(/\\s+/g,' ').trim().slice(0,300);
+        }
+        all.push({loan:loan,period:period,status:status,details:details});
+      });
+      return rows.length;
+    }
+
+    function waitForPageChange(oldFirstRowText){
+      return new Promise(function(resolve){
+        var deadline=Date.now()+8000;
+        var interval=setInterval(function(){
+          var firstRow=document.querySelector('tr.main-table-row');
+          var newText=firstRow?(firstRow.innerText||'').trim():'';
+          if(newText && newText!==oldFirstRowText){
+            clearInterval(interval);
+            setTimeout(resolve,300);
+          } else if(Date.now()>deadline){
+            clearInterval(interval);
+            resolve(); // give up waiting, harvest whatever is there
+          }
+        },100);
+      });
+    }
+
+    function findNextBtn(){
+      var candidates=[
+        'button[aria-label="Next page"]',
+        'a[aria-label="Next page"]',
+        '[aria-label="Go to next page"]',
+        '.fsa-pagination__link--next',
+        'li.fsa-pagination__item--next a',
+        'li.fsa-pagination__item--next button',
+      ];
+      for(var i=0;i<candidates.length;i++){
+        var el=document.querySelector(candidates[i]);
+        if(el&&!el.disabled&&!el.closest('[aria-disabled="true"]')&&!el.classList.contains('fsa-pagination__link--disabled')) return el;
+      }
+      var all2=document.querySelectorAll('.fsa-pagination button,.fsa-pagination a,[class*="pagination"] button,[class*="pagination"] a');
+      for(var j=0;j<all2.length;j++){
+        var txt=(all2[j].innerText||all2[j].textContent||'').trim();
+        if(txt==='Next'||txt==='Next page') return all2[j];
+      }
+      return null;
+    }
+
+    function getTotal(){
+      var selectors=['.fsa-font-size-20','[class*="result-count"]','[class*="ResultCount"]','[class*="pagination"] span'];
+      for(var i=0;i<selectors.length;i++){
+        var els=document.querySelectorAll(selectors[i]);
+        for(var j=0;j<els.length;j++){
+          var m=(els[j].innerText||'').match(/of\\s*(\\d+)/i);
+          if(m) return parseInt(m[1]);
+        }
+      }
+      var bodyText=document.body.innerText;
+      var m2=bodyText.match(/\\d+\\s*-\\s*\\d+\\s+of\\s+(\\d+)/);
+      if(m2) return parseInt(m2[1]);
+      return null;
+    }
+
+    var overlay=document.createElement('div');
+    overlay.id='pslf-scraper-overlay';
+    overlay.style.cssText='position:fixed;top:16px;right:16px;z-index:99999;background:#0a0f1e;color:#00d4ff;border:1px solid #1e2d42;border-radius:10px;padding:14px 20px;font-family:monospace;font-size:13px;box-shadow:0 4px 24px rgba(0,0,0,0.5);min-width:260px;';
+    overlay.innerHTML='<strong>📊 PSLF Scraper</strong><br><span id="pslf-status">Starting...</span>';
+    document.body.appendChild(overlay);
+    function setStatus(msg){var el=document.getElementById('pslf-status');if(el)el.textContent=msg;}
+
+    harvest();
+    var total=getTotal();
+    if(!total){
+      setStatus('Could not detect payment count. Scraping what is visible...');
+      var json2=JSON.stringify(all);
+      copyAndFinish(json2,all.length);
+      return;
+    }
+    var pages=Math.ceil(total/10);
+    setStatus('Page 1/'+pages+' — '+all.length+' payments collected');
+
+    for(var p=2;p<=pages;p++){
+      var firstRow=document.querySelector('tr.main-table-row');
+      var firstText=firstRow?(firstRow.innerText||'').trim():'';
+
+      var nextBtn=findNextBtn();
+      if(!nextBtn){
+        setStatus('Next button not found — stopped at page '+(p-1));
+        break;
+      }
+      nextBtn.click();
+      await waitForPageChange(firstText);
+      var harvested=harvest();
+      setStatus('Page '+p+'/'+pages+' — '+all.length+' payments collected');
+      if(harvested===0) break; // something went wrong, bail
+    }
+
+    copyAndFinish(JSON.stringify(all),all.length);
+  }
+
+  function copyAndFinish(json,count){
+    var overlay=document.getElementById('pslf-scraper-overlay');
+    try{
+      navigator.clipboard.writeText(json).then(function(){
+        if(overlay) overlay.innerHTML='<strong>✅ Done!</strong><br>Copied '+count+' payments.<br><small style="color:#64748b">Go paste into PSLF Tracker</small>';
+        setTimeout(function(){if(overlay)overlay.remove();window.__pslfRunning=false;},4000);
+        alert('✅ Copied '+count+' payments to clipboard!\\nGo back to your PSLF Tracker and paste it in.');
+      }).catch(fallback);
+    }catch(e){fallback();}
+    function fallback(){
+      var ta=document.createElement('textarea');
+      ta.value=json;ta.style.position='fixed';ta.style.top='-9999px';
+      document.body.appendChild(ta);ta.select();
+      try{document.execCommand('copy');}catch(e2){}
+      document.body.removeChild(ta);
+      if(overlay) overlay.innerHTML='<strong>✅ Done!</strong><br>Copied '+count+' payments.<br><small style="color:#64748b">Go paste into PSLF Tracker</small>';
+      setTimeout(function(){if(overlay)overlay.remove();window.__pslfRunning=false;},4000);
+      alert('✅ Copied '+count+' payments to clipboard!\\nGo back to your PSLF Tracker and paste it in.');
+    }
+  }
+
+  run().catch(function(err){
+    window.__pslfRunning=false;
+    var overlay=document.getElementById('pslf-scraper-overlay');
+    if(overlay) overlay.remove();
+    alert('PSLF Scraper error: '+err.message);
+  });
+})();`;
+
+document.getElementById('bookmarkletLink').href = 'javascript:' + encodeURIComponent(bookmarkletCode);
+
+let allPayments = [];
+let selectedLoan = 'all';
+let buybackSelected = new Set();
+let tablePage = 1; // keys: 'period||loan' of selected non-qualifying cells
+let buybackAnchorDate = null;
+let buybackTrailingPending = 0;
+
+function parseDate(period) {
+  const parts = (period || '').split('/');
+  if (parts.length === 2) return new Date(parseInt(parts[1]), parseInt(parts[0]) - 1, 1);
+  return null;
+}
+
+function getFiltered() {
+  return selectedLoan === 'all' ? allPayments : allPayments.filter(p => p.loan === selectedLoan);
+}
+
+function dedup(payments) {
+  const rank = { qualifying: 3, pending: 2, 'non-qualifying': 1 };
+  const map = {};
+  payments.forEach(p => {
+    const key = p.period;
+    if (!map[key] || rank[p.status] > rank[map[key].status]) map[key] = p;
+  });
+  return Object.values(map).sort((a, b) => parseDate(a.period) - parseDate(b.period));
+}
+
+function generateSample() {
+  const loans = ['1 - Direct Subsidized Loan', '2 - Direct Unsubsidized Loan'];
+  const data = [];
+  const now = new Date();
+  for (let y = 2015; y <= now.getFullYear(); y++) {
+    for (let m = 1; m <= 12; m++) {
+      if (y === now.getFullYear() && m > now.getMonth() + 1) break;
+      const period = String(m).padStart(2,'0') + '/' + y;
+      const monthsIn = (y - 2015) * 12 + m - 1;
+      loans.forEach((loan, li) => {
+        let status;
+        if (monthsIn < 2) status = 'non-qualifying';
+        else if (monthsIn < 5) status = 'pending';
+        else if (monthsIn > (y === now.getFullYear() ? now.getMonth() - 3 : 1200)) status = 'pending';
+        else status = Math.random() > 0.07 ? 'qualifying' : 'non-qualifying';
+        data.push({ loan, period, status, details: '' });
+      });
+    }
+  }
+  return data;
+}
+
+function toggleAddLoan() {
+  const body = document.getElementById('addLoanBody');
+  const btn = document.getElementById('addLoanToggleBtn');
+  const expanded = body.style.display !== 'none';
+  body.style.display = expanded ? 'none' : 'block';
+  btn.textContent = expanded ? '▶ Expand' : '▼ Collapse';
+}
+
+function addLoanData() {
+  const raw = document.getElementById('addLoanInput').value.trim();
+  const errEl = document.getElementById('addLoanError');
+  const okEl = document.getElementById('addLoanSuccess');
+  errEl.style.display = 'none';
+  okEl.style.display = 'none';
+  if (!raw) { errEl.textContent = 'Paste loan data first.'; errEl.style.display = 'block'; return; }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Expected a non-empty array.');
+    const existing = new Set(allPayments.map(p => p.loan + '||' + p.period));
+    const added = parsed.filter(p => !existing.has(p.loan + '||' + p.period));
+    allPayments = allPayments.concat(added);
+    selectedLoan = 'all';
+    renderDashboard();
+    document.getElementById('addLoanInput').value = '';
+    okEl.textContent = `✅ Added ${added.length} new payments (${parsed.length - added.length} duplicates skipped). Total: ${allPayments.length} payments.`;
+    okEl.style.display = 'block';
+  } catch(e) {
+    errEl.textContent = 'Parse error: ' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function loadSample() {
+  document.getElementById('jsonInput').value = JSON.stringify(generateSample(), null, 2);
+  loadData();
+}
+
+function clearData() {
+  document.getElementById('jsonInput').value = '';
+
+  allPayments = [];
+}
+
+function loadData() {
+  const raw = document.getElementById('jsonInput').value.trim();
+  const errEl = document.getElementById('importError');
+  errEl.style.display = 'none';
+  if (!raw) { errEl.textContent = 'Paste your payment data first.'; errEl.style.display = 'block'; return; }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Expected a non-empty array of payments.');
+    allPayments = parsed;
+    selectedLoan = 'all';
+    renderDashboard();
+
+    setTimeout(() => document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' }), 100);
+  } catch(e) {
+    errEl.textContent = 'Parse error: ' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function renderDashboard() {
+  const loans = [...new Set(allPayments.map(p => p.loan))].sort();
+
+  const filterEl = document.getElementById('loanFilter');
+  filterEl.innerHTML = '';
+  const allPill = document.createElement('button');
+  allPill.className = 'loan-pill' + (selectedLoan === 'all' ? ' active' : '');
+  allPill.textContent = 'All Loans';
+  allPill.onclick = () => { buybackSelected.clear(); selectedLoan = 'all'; renderDashboard(); };
+  filterEl.appendChild(allPill);
+
+  loans.forEach(loan => {
+    const pill = document.createElement('button');
+    pill.className = 'loan-pill' + (selectedLoan === loan ? ' active' : '');
+    pill.textContent = loan;
+    pill.onclick = () => { buybackSelected.clear(); selectedLoan = loan; renderDashboard(); };
+    filterEl.appendChild(pill);
+  });
+
+  const payments = dedup(getFiltered());
+  const qCount = payments.filter(p => p.status === 'qualifying').length;
+  const nqCount = payments.filter(p => p.status === 'non-qualifying').length;
+  const pCount = payments.filter(p => p.status === 'pending').length;
+  const remaining = Math.max(0, 120 - qCount);
+
+  document.getElementById('statQ').textContent = qCount;
+  document.getElementById('statNQ').textContent = nqCount;
+  document.getElementById('statP').textContent = pCount;
+  document.getElementById('statRem').textContent = remaining;
+
+  let trailingPendingCount = 0;
+  if (payments.length > 0) {
+    const periodMap = {};
+    payments.forEach(p => { periodMap[p.period] = p.status; });
+
+    const latestPayment = payments[payments.length - 1]; // already sorted ascending
+    let cursor = parseDate(latestPayment.period);
+
+    while (cursor) {
+      const key = (cursor.getMonth() + 1) + '/' + cursor.getFullYear();
+      const status = periodMap[key];
+      if (status === 'pending') {
+        trailingPendingCount++;
+        cursor.setMonth(cursor.getMonth() - 1);
+      } else {
+        break;
+      }
+    }
+  }
+
+  const latestAnchor = payments[payments.length - 1];
+  const anchorDate = latestAnchor ? parseDate(latestAnchor.period) : null;
+  buybackAnchorDate = anchorDate;
+  buybackTrailingPending = trailingPendingCount;
+
+  function projectFromAnchor(extraMonths) {
+    if (!anchorDate) return '—';
+    const d = new Date(anchorDate);
+    d.setMonth(d.getMonth() + extraMonths);
+    return MONTHS_SHORT[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  let estDate = '—';
+  if (qCount >= 120) {
+    estDate = '🎉 Done!';
+  } else if (anchorDate) {
+    estDate = projectFromAnchor(remaining);
+  }
+
+  let estDateOptimistic = null;
+  if (qCount < 120 && trailingPendingCount > 0) {
+    const optimisticQ = qCount + trailingPendingCount;
+    const optimisticRemaining = Math.max(0, 120 - optimisticQ);
+    if (optimisticQ >= 120) {
+      estDateOptimistic = '🎉 Done if certified!';
+    } else {
+      estDateOptimistic = projectFromAnchor(optimisticRemaining);
+    }
+  }
+
+  document.getElementById('statDate').textContent = estDate;
+
+  const pct = Math.min(100, Math.round((qCount / 120) * 100));
+  document.getElementById('ringCircle').style.strokeDashoffset = 213.6 * (1 - pct / 100);
+  document.getElementById('ringPct').textContent = pct + '%';
+  document.getElementById('ringFraction').textContent = qCount + '/120';
+  document.getElementById('ringRemaining').textContent = remaining > 0 ? remaining + ' remaining' : '🎉 Complete!';
+  // Sync nav mini-ring
+  const navCircle = document.getElementById('navRingCircle');
+  if (navCircle) navCircle.style.strokeDashoffset = 87.96 * (1 - pct / 100);
+  const navFrac = document.getElementById('navRingFraction');
+  if (navFrac) navFrac.textContent = qCount + '/120';
+
+  renderGrid(payments, qCount, remaining, estDate, trailingPendingCount, estDateOptimistic);
+  const bkQField = document.getElementById('buybackCurrentQ');
+  if (bkQField && !bkQField.value) bkQField.placeholder = qCount;
+  renderBuybackPanel();
+  renderTable();
+}
+
+function renderAllLoansSummary(container) {
+  const loans = [...new Set(allPayments.map(p => p.loan))].sort();
+
+  function projectDate(anchorDate, moreNeeded) {
+    if (!anchorDate || moreNeeded < 0) return null;
+    const d = new Date(anchorDate);
+    d.setMonth(d.getMonth() + moreNeeded);
+    return MONTHS_SHORT[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  let html = '<div style="overflow-x:auto;border-radius:12px;border:1px solid var(--border);">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  html += '<thead><tr style="background:var(--surface2);">';
+  html += '<th class="st" style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:500;">Loan</th>';
+  html += '<th class="st-r" style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--qualifying);font-weight:500;">Qualifying</th>';
+  html += '<th class="st-r" style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--warn);font-weight:500;">Pending</th>';
+  html += '<th class="st-r" style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--nonqualifying);font-weight:500;">Non-Qual.</th>';
+  html += '<th class="st-r" style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:500;">Total</th>';
+  html += '<th class="st" style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--accent2);font-weight:500;">Est. Forgiveness</th>';
+  html += '<th class="st" style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--qualifying);font-weight:500;">If Pending Certified</th>';
+  html += '</tr></thead><tbody>';
+
+  let totQ = 0, totP = 0, totNQ = 0, totAll = 0;
+
+  loans.forEach(loan => {
+    const loanPayments = allPayments.filter(p => p.loan === loan);
+    const dedupedLoan = dedup(loanPayments);
+    const q = dedupedLoan.filter(p => p.status === 'qualifying').length;
+    const pend = dedupedLoan.filter(p => p.status === 'pending').length;
+    const nq = dedupedLoan.filter(p => p.status === 'non-qualifying').length;
+    totQ += q; totP += pend; totNQ += nq; totAll += loanPayments.length;
+
+    const sorted = [...dedupedLoan].sort((a, b) => parseDate(a.period) - parseDate(b.period));
+    const latestPayment = sorted[sorted.length - 1];
+    const anchorDate = latestPayment ? parseDate(latestPayment.period) : null;
+    const remaining = Math.max(0, 120 - q);
+
+    let estDate = '—';
+    if (q >= 120) {
+      estDate = '<span style="color:var(--qualifying)">🎉 Done!</span>';
+    } else if (anchorDate) {
+      estDate = `<span style="color:var(--accent2)">${projectDate(anchorDate, remaining)}</span>`;
+    }
+
+    const trailingP = calcTrailingPending(sorted);
+    let estOpt = '—';
+    if (q >= 120) {
+      estOpt = '<span style="color:var(--qualifying)">🎉 Done!</span>';
+    } else if (trailingP > 0 && anchorDate) {
+      const optRemaining = Math.max(0, 120 - q - trailingP);
+      if (optRemaining === 0) {
+        estOpt = '<span style="color:var(--qualifying)">🎉 Done if certified!</span>';
+      } else {
+        estOpt = `<span style="color:var(--qualifying)">${projectDate(anchorDate, optRemaining)}</span>`;
+      }
+    } else if (anchorDate) {
+      estOpt = `<span style="color:var(--muted)">${projectDate(anchorDate, remaining)}</span>`;
+    }
+
+    html += `<tr style="border-top:1px solid var(--border);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">`;
+    html += `<td class="st" style="color:var(--text);font-size:12px;">${loan}</td>`;
+    html += `<td class="st-r" style="color:var(--qualifying);font-family:'Syne',sans-serif;font-weight:700;">${q}</td>`;
+    html += `<td class="st-r" style="color:var(--warn);font-family:'Syne',sans-serif;font-weight:700;">${pend}</td>`;
+    html += `<td class="st-r" style="color:var(--nonqualifying);font-family:'Syne',sans-serif;font-weight:700;">${nq}</td>`;
+    html += `<td class="st-r" style="color:var(--accent);font-family:'Syne',sans-serif;font-weight:700;">${loanPayments.length}</td>`;
+    html += `<td class="st" style="font-size:13px;">${estDate}</td>`;
+    html += `<td class="st" style="font-size:13px;">${estOpt}</td>`;
+    html += '</tr>';
+  });
+
+  html += `<tr style="border-top:2px solid var(--border);background:var(--surface2);">`;
+  html += `<td class="st" style="color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;">All Loans</td>`;
+  html += `<td class="st-r" style="color:var(--qualifying);font-family:'Syne',sans-serif;font-weight:800;font-size:16px;">${totQ}</td>`;
+  html += `<td class="st-r" style="color:var(--warn);font-family:'Syne',sans-serif;font-weight:800;font-size:16px;">${totP}</td>`;
+  html += `<td class="st-r" style="color:var(--nonqualifying);font-family:'Syne',sans-serif;font-weight:800;font-size:16px;">${totNQ}</td>`;
+  html += `<td class="st-r" style="color:var(--accent);font-family:'Syne',sans-serif;font-weight:800;font-size:16px;">${totAll}</td>`;
+  html += `<td colspan="2" class="st" style="color:var(--muted);font-size:11px;">Select a loan above to view its payment grid &amp; buyback planner</td>`;
+  html += '</tr>';
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+function renderGrid(payments, qCount, remaining, estDate, trailingPendingCount, estDateOptimistic) {
+  const grid = document.getElementById('timelineGrid');
+  const monthHeader = document.getElementById('monthHeader');
+  const projNote = document.getElementById('projectionNote');
+  const allLoansEl = document.getElementById('allLoansOverview');
+  const singleLoanEl = document.getElementById('singleLoanGrid');
+  const buybackEl = document.getElementById('buybackPanelEl');
+  const buybackHeader = buybackEl ? buybackEl.previousElementSibling : null;
+
+  if (selectedLoan === 'all') {
+    if (allLoansEl) { allLoansEl.style.display = 'block'; renderAllLoansSummary(allLoansEl); }
+    if (singleLoanEl) singleLoanEl.style.display = 'none';
+    if (buybackEl) buybackEl.style.display = 'none';
+    if (buybackHeader && buybackHeader.classList.contains('section-header')) buybackHeader.style.display = 'none';
+    projNote.style.color = ''; projNote.style.borderColor = ''; projNote.innerHTML = '';
+    return;
+  }
+
+  if (allLoansEl) allLoansEl.style.display = 'none';
+  if (singleLoanEl) singleLoanEl.style.display = 'block';
+  if (buybackEl) buybackEl.style.display = 'block';
+  if (buybackHeader && buybackHeader.classList.contains('section-header')) buybackHeader.style.display = '';
+
+  grid.innerHTML = '';
+  monthHeader.innerHTML = '';
+
+  MONTHS_SHORT.forEach(m => {
+    const s = document.createElement('span');
+    s.textContent = m;
+    monthHeader.appendChild(s);
+  });
+
+  if (!payments.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No data</div>';
+    return;
+  }
+
+  const firstDate = parseDate(payments[0].period);
+  const startYear = firstDate ? firstDate.getFullYear() : new Date().getFullYear();
+  const now = new Date();
+  const endYear = Math.max(now.getFullYear() + 1, startYear + 10);
+
+  const map = {};
+  payments.forEach(p => {
+    const d = parseDate(p.period);
+    if (d) map[d.getFullYear() + '-' + (d.getMonth() + 1)] = p;
+  });
+
+  for (let yr = startYear; yr <= endYear; yr++) {
+    const row = document.createElement('div');
+    row.className = 'year-row';
+    const label = document.createElement('div');
+    label.className = 'year-label';
+    label.textContent = yr;
+    row.appendChild(label);
+    const cells = document.createElement('div');
+    cells.className = 'year-cells';
+
+    for (let mo = 1; mo <= 12; mo++) {
+      const cell = document.createElement('div');
+      cell.className = 'pay-cell';
+      const isFuture = new Date(yr, mo - 1, 1) > now;
+      const p = map[yr + '-' + mo];
+
+      if (isFuture) {
+        cell.classList.add('future');
+      } else if (p) {
+        const statusClass = p.status === 'qualifying' ? 'qualifying' : p.status === 'pending' ? 'pending' : 'non-qualifying';
+        cell.classList.add(statusClass);
+        cell.addEventListener('mouseenter', e => showTip(e, p));
+        cell.addEventListener('mousemove', moveTip);
+        cell.addEventListener('mouseleave', hideTip);
+        if (p.status === 'non-qualifying') {
+          const bkKey = p.period + '||' + p.loan;
+          if (buybackSelected.has(bkKey)) cell.classList.add('buyback-selected');
+          cell.addEventListener('click', () => toggleBuyback(p, cell));
+        }
+      } else {
+        cell.classList.add('non-qualifying');
+        cell.style.opacity = '0.25';
+      }
+      cells.appendChild(cell);
+    }
+    row.appendChild(cells);
+    grid.appendChild(row);
+  }
+
+  projNote.style.color = '';
+  projNote.style.borderColor = '';
+  projNote.innerHTML = '';
+
+  if (qCount >= 120) {
+    projNote.innerHTML = '🎉 You have reached 120 qualifying payments — congratulations!';
+    projNote.style.color = 'var(--qualifying)';
+    projNote.style.borderColor = 'rgba(16,185,129,0.3)';
+  } else if (estDate !== '—' || estDateOptimistic) {
+    const lines = [];
+    if (estDate !== '—') {
+      lines.push(
+        '<span style="color:var(--muted)">📅 <strong style=\'color:var(--text)\'>Conservative:</strong> ' + estDate +
+        ' &nbsp;·&nbsp; ' + remaining + ' qualifying payments still needed</span>'
+      );
+    }
+    if (estDateOptimistic) {
+      const optRemaining = Math.max(0, 120 - (qCount + trailingPendingCount));
+      lines.push(
+        '<span style="color:var(--qualifying)">✨ <strong>If pending certified:</strong> ' + estDateOptimistic +
+        ' &nbsp;·&nbsp; ' + trailingPendingCount + ' trailing pending would count, ' +
+        (optRemaining > 0 ? optRemaining + ' more needed' : 'already at 120!') + '</span>'
+      );
+    }
+    projNote.innerHTML = lines.join('<br style="margin-bottom:4px">') + '<span id="projBuybackLine"></span>';
+  }
+}
+
+function renderTable() {
+  const filterVal = document.getElementById('tableFilter').value;
+  const pageSizeVal = document.getElementById('tablePageSize').value;
+  const pageSize = pageSizeVal === 'all' ? Infinity : parseInt(pageSizeVal);
+
+  const loanSelect = document.getElementById('tableLoanFilter');
+  const currentLoanVal = loanSelect.value;
+  const allLoans = [...new Set(allPayments.map(p => p.loan))].sort();
+  loanSelect.innerHTML = '<option value="all">All Loans</option>' +
+    allLoans.map(l => `<option value="${l}" ${l === currentLoanVal ? 'selected' : ''}>${l}</option>`).join('');
+  const loanVal = loanSelect.value;
+
+  let payments = getFiltered();
+  if (filterVal !== 'all') payments = payments.filter(p => p.status === filterVal);
+  if (loanVal !== 'all') payments = payments.filter(p => p.loan === loanVal);
+  payments = [...payments].sort((a, b) => parseDate(b.period) - parseDate(a.period));
+
+  const total = payments.length;
+  const totalPages = pageSize === Infinity ? 1 : Math.ceil(total / pageSize);
+  if (tablePage > totalPages) tablePage = totalPages || 1;
+  if (tablePage < 1) tablePage = 1;
+
+  const start = pageSize === Infinity ? 0 : (tablePage - 1) * pageSize;
+  const end = pageSize === Infinity ? total : Math.min(start + pageSize, total);
+  const pagePayments = payments.slice(start, end);
+
+  if (pageSize === Infinity || total <= pageSize) {
+    document.getElementById('tableCount').textContent = total + ' payments';
+  } else {
+    document.getElementById('tableCount').textContent = (start + 1) + '–' + end + ' of ' + total;
+  }
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+  if (!payments.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:32px;">No payments match this filter</td></tr>';
+    renderPagination(0, 0, 0);
+    return;
+  }
+
+  const allSorted = [...getFiltered()].sort((a, b) => parseDate(a.period) - parseDate(b.period));
+  const qMap = {};
+  let qRunning = 0;
+  const seenP = new Set();
+  allSorted.forEach(p => {
+    if (!seenP.has(p.period)) {
+      seenP.add(p.period);
+      if (p.status === 'qualifying') qRunning++;
+      qMap[p.period] = qRunning;
+    }
+  });
+
+  const statusBadges = {
+    'qualifying': '<span class="badge q">Qualifying</span>',
+    'non-qualifying': '<span class="badge nq">Non-Qualifying</span>',
+    'pending': '<span class="badge p">Pending Cert.</span>',
+  };
+
+  pagePayments.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    const globalIdx = start + i + 1;
+    const qNum = p.status === 'qualifying' && qMap[p.period]
+      ? `<span style="color:var(--qualifying);font-size:10px;margin-left:6px">#${qMap[p.period]}</span>`
+      : '';
+    tr.innerHTML = `
+      <td style="color:var(--muted)">${globalIdx}</td>
+      <td style="font-weight:500">${p.period}</td>
+      <td style="color:var(--muted);font-size:12px">${p.loan}</td>
+      <td>${statusBadges[p.status] || '<span class="badge">Unknown</span>'} ${qNum}</td>
+      <td style="color:var(--muted);font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.details || '—'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  renderPagination(tablePage, totalPages, total);
+}
+
+function renderPagination(page, totalPages, total) {
+  const el = document.getElementById('tablePagination');
+  if (!el) return;
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+
+  const remaining = total - page * parseInt(document.getElementById('tablePageSize').value || 10);
+
+  let html = '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">';
+
+  const btn = (label, p, disabled, active) =>
+    `<button onclick="tablePage=${p};renderTable()" style="padding:5px 11px;border-radius:8px;border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};background:${active ? 'rgba(0,212,255,0.12)' : 'var(--surface2)'};color:${active ? 'var(--accent)' : disabled ? 'var(--muted)' : 'var(--text)'};font-family:DM Mono,monospace;font-size:12px;cursor:${disabled ? 'default' : 'pointer'};" ${disabled ? 'disabled' : ''}>${label}</button>`;
+
+  html += btn('«', 1, page === 1, false);
+  html += btn('‹', page - 1, page === 1, false);
+
+  const winStart = Math.max(1, Math.min(page - 2, totalPages - 4));
+  const winEnd = Math.min(totalPages, winStart + 4);
+  if (winStart > 1) html += `<span style="color:var(--muted);font-size:12px;padding:0 2px">…</span>`;
+  for (let p = winStart; p <= winEnd; p++) html += btn(p, p, false, p === page);
+  if (winEnd < totalPages) html += `<span style="color:var(--muted);font-size:12px;padding:0 2px">…</span>`;
+
+  html += btn('›', page + 1, page === totalPages, false);
+  html += btn('»', totalPages, page === totalPages, false);
+  html += '</div>';
+
+  const rem = Math.max(0, total - page * (parseInt(document.getElementById('tablePageSize').value) || total));
+  if (rem > 0) {
+    html += `<span style="font-size:11px;color:var(--muted)">${rem} more payment${rem !== 1 ? 's' : ''} on next pages</span>`;
+  }
+
+  el.innerHTML = html;
+}
+
+
+// Keywords that indicate a buyback-eligible period (deferment or forbearance types)
+// Ineligible types: in-school, grace period, bankruptcy, default — excluded below
+const BUYBACK_ELIGIBLE_PATTERNS = [
+  /forbearance/i,
+  /administrative forbearance/i,
+  /economic hardship/i,
+  /covid/i,
+  /pandemic/i,
+  /payment pause/i,
+  /general forbearance/i,
+  /mandatory forbearance/i,
+  /military/i,
+  /unemployment/i,
+  /financial hardship/i,
+  /deferment/i,
+  /cancer treatment/i,
+  /rehabilitation/i,
+];
+
+const BUYBACK_INELIGIBLE_PATTERNS = [
+  /in.school/i,
+  /in school/i,
+  /grace period/i,
+  /bankruptcy/i,
+  /default/i,
+  /separation/i,
+];
+
+function isBuybackEligibleByDetails(details) {
+  if (!details) return null; // unknown — can't determine
+  const d = details.trim();
+  if (!d) return null;
+  // Check ineligible first
+  if (BUYBACK_INELIGIBLE_PATTERNS.some(p => p.test(d))) return false;
+  // Check eligible
+  if (BUYBACK_ELIGIBLE_PATTERNS.some(p => p.test(d))) return true;
+  return null; // details present but reason not recognized
+}
+
+function autoSelectBuyback() {
+  const payments = dedup(getFiltered());
+  const nonQ = payments.filter(p => p.status === 'non-qualifying');
+
+  let selected = 0, alreadyHad = 0, unknown = 0, ineligible = 0;
+  const unknownReasons = new Set();
+
+  nonQ.forEach(p => {
+    const key = p.period + '||' + p.loan;
+    const eligible = isBuybackEligibleByDetails(p.details);
+    if (eligible === true) {
+      if (!buybackSelected.has(key)) { buybackSelected.add(key); selected++; }
+      else alreadyHad++;
+    } else if (eligible === false) {
+      ineligible++;
+    } else {
+      unknown++;
+      // Collect the unknown reason text for reporting
+      const reason = (p.details || '').trim().slice(0, 60);
+      if (reason) unknownReasons.add(reason);
+    }
+  });
+
+  // Re-render grid to show visual selection
+  renderDashboard();
+
+  // Show result summary
+  const resultEl = document.getElementById('bkAutoResult');
+  if (resultEl) {
+    resultEl.style.display = 'block';
+    let html = '';
+    if (selected + alreadyHad > 0) {
+      html += `<strong style="color:var(--accent)">✅ ${selected + alreadyHad} month${selected + alreadyHad !== 1 ? 's' : ''} selected</strong> — `;
+      html += `${selected} newly added, ${alreadyHad} already selected.<br>`;
+    }
+    if (ineligible > 0) {
+      html += `<span style="color:var(--muted)">⛔ ${ineligible} month${ineligible !== 1 ? 's' : ''} excluded</span> — in-school deferment, grace period, or other ineligible reason.<br>`;
+    }
+    if (unknown > 0) {
+      html += `<span style="color:var(--warn)">⚠️ ${unknown} month${unknown !== 1 ? 's' : ''} could not be classified</span> — no details scraped or reason not recognized.`;
+      if (unknownReasons.size > 0) {
+        html += `<br><span style="color:var(--muted);font-size:11px;">Unrecognized: ${[...unknownReasons].slice(0,3).join(' · ')}</span>`;
+      }
+      html += '<br>';
+    }
+    if (selected + alreadyHad === 0 && unknown === 0) {
+      html += `<span style="color:var(--muted)">No eligible months found. Your non-qualifying payments may all be ineligible types, or the scraper may not have captured reason details — try re-running the bookmarklet.</span>`;
+    }
+    html += `<br><span style="color:var(--muted);font-size:11px;">⚠️ <em>This is an estimate based on reason codes in your payment data. Eligibility also requires: qualifying employment during these months, a Direct Loan with outstanding balance, and that buyback gets you to 120 payments. Verify with your servicer before submitting.</em></span>`;
+    resultEl.innerHTML = html;
+  }
+}
+
+function toggleBuyback(p, cell) {
+  const key = p.period + '||' + p.loan;
+  if (buybackSelected.has(key)) {
+    buybackSelected.delete(key);
+    cell.classList.remove('buyback-selected');
+  } else {
+    buybackSelected.add(key);
+    cell.classList.add('buyback-selected');
+  }
+  renderBuybackPanel();
+}
+
+function clearBuybackSelection() {
+  buybackSelected.clear();
+  const ar = document.getElementById('bkAutoResult');
+  if (ar) ar.style.display = 'none';
+  renderDashboard();
+}
+
+function renderBuybackPanel() {
+  const chipsEl = document.getElementById('buybackChips');
+  const resultEl = document.getElementById('buybackResult');
+
+  const selectedPayments = [];
+  allPayments.forEach(p => {
+    if (p.status === 'non-qualifying' && buybackSelected.has(p.period + '||' + p.loan)) {
+      selectedPayments.push(p);
+    }
+  });
+  const byPeriod = {};
+  selectedPayments.forEach(p => {
+    if (!byPeriod[p.period]) byPeriod[p.period] = [];
+    byPeriod[p.period].push(p.loan);
+  });
+  const uniquePeriods = Object.keys(byPeriod).sort((a, b) => parseDate(a) - parseDate(b));
+
+  if (uniquePeriods.length === 0) {
+    chipsEl.innerHTML = '<span style="font-size:12px;color:var(--muted);align-self:center">No months selected — click red cells in the grid above</span>';
+    resultEl.classList.remove('visible');
+    const bkLineEl = document.getElementById('projBuybackLine');
+    if (bkLineEl) bkLineEl.innerHTML = '';
+    const bkProjDateEl = document.getElementById('bkProjectedDate');
+    if (bkProjDateEl) bkProjDateEl.textContent = '';
+    const bkAR = document.getElementById('bkAutoResult');
+    if (bkAR) bkAR.style.display = 'none';
+    return;
+  }
+
+  chipsEl.innerHTML = '';
+  uniquePeriods.forEach(period => {
+    const chip = document.createElement('span');
+    chip.className = 'buyback-chip';
+    chip.innerHTML = `${period} <button title="Remove" onclick="deselectPeriod('${period}')">×</button>`;
+    chipsEl.appendChild(chip);
+  });
+
+  resultEl.classList.add('visible');
+  recalcBuyback();
+}
+
+function deselectPeriod(period) {
+  [...buybackSelected].forEach(key => {
+    if (key.startsWith(period + '||')) buybackSelected.delete(key);
+  });
+  const payments = dedup(getFiltered());
+  const qCount = payments.filter(p => p.status === 'qualifying').length;
+  const trailingP = calcTrailingPending(payments);
+  const rem = Math.max(0, 120 - qCount);
+  const anchor = payments[payments.length - 1];
+  const anchorDate = anchor ? parseDate(anchor.period) : null;
+  function proj(extra) {
+    if (!anchorDate) return '—';
+    const d = new Date(anchorDate); d.setMonth(d.getMonth() + extra);
+    return MONTHS_SHORT[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  const estDate = qCount >= 120 ? '🎉 Done!' : (anchorDate ? proj(rem) : '—');
+  const optQ = qCount + trailingP;
+  const estOpt = (qCount < 120 && trailingP > 0)
+    ? (optQ >= 120 ? '🎉 Done if certified!' : proj(Math.max(0, 120 - optQ)))
+    : null;
+  renderGrid(payments, qCount, rem, estDate, trailingP, estOpt);
+  renderBuybackPanel();
+}
+
+function calcTrailingPending(payments) {
+  if (!payments.length) return 0;
+  const periodMap = {};
+  payments.forEach(p => { periodMap[p.period] = p.status; });
+  let count = 0;
+  let cursor = parseDate(payments[payments.length - 1].period);
+  while (cursor) {
+    const key = (cursor.getMonth() + 1) + '/' + cursor.getFullYear();
+    if (periodMap[key] === 'pending') { count++; cursor.setMonth(cursor.getMonth() - 1); }
+    else break;
+  }
+  return count;
+}
+
+function recalcBuyback() {
+  const idrInput = parseFloat(document.getElementById('buybackIDR').value) || null;
+  const currentQInput = document.getElementById('buybackCurrentQ');
+
+  const selectedPeriods = new Set();
+  [...buybackSelected].forEach(key => selectedPeriods.add(key.split('||')[0]));
+  const months = selectedPeriods.size;
+
+  document.getElementById('bkMonths').textContent = months;
+
+  const payments = dedup(getFiltered());
+  const autoQ = payments.filter(p => p.status === 'qualifying').length;
+  if (!currentQInput.value) currentQInput.placeholder = autoQ;
+  const currentQ = parseInt(currentQInput.value) || autoQ;
+
+  const trailingP = buybackTrailingPending;
+  const newTotal = currentQ + months + trailingP;
+  const stillNeeded = Math.max(0, 120 - newTotal);
+
+  document.getElementById('bkNewTotal').textContent = newTotal + '/120';
+  document.getElementById('bkStillNeeded').textContent = stillNeeded === 0 ? '✅ None!' : stillNeeded;
+
+  const bkProjDateEl = document.getElementById('bkProjectedDate');
+  if (bkProjDateEl) {
+    if (stillNeeded === 0) {
+      bkProjDateEl.textContent = '🎉 Now!';
+    } else if (buybackAnchorDate && months > 0) {
+      const d = new Date(buybackAnchorDate);
+      d.setMonth(d.getMonth() + stillNeeded);
+      bkProjDateEl.textContent = MONTHS_SHORT[d.getMonth()] + ' ' + d.getFullYear();
+    } else {
+      bkProjDateEl.textContent = '';
+    }
+  }
+
+  const bkLineEl = document.getElementById('projBuybackLine');
+  if (bkLineEl) {
+    if (months > 0 && buybackAnchorDate) {
+      if (stillNeeded === 0) {
+        bkLineEl.innerHTML = '<br><span style="color:#f97316">🔄 <strong>With buyback (${months} month${months > 1 ? \'s\' : \'\'}  selected):</strong> Eligible now if buyback approved!</span>'
+          .replace('${months}', months).replace('${months > 1 ? \'s\' : \'\'}', months > 1 ? 's' : '');
+      } else {
+        const d = new Date(buybackAnchorDate);
+        d.setMonth(d.getMonth() + stillNeeded);
+        const projDate = MONTHS_SHORT[d.getMonth()] + ' ' + d.getFullYear();
+        bkLineEl.innerHTML = ('<br><span style="color:#f97316">🔄 <strong>With buyback (N month(s) selected):</strong> PROJDATE &nbsp;·&nbsp; STILL more needed after buyback</span>')
+          .replace('N', months)
+          .replace('month(s)', months > 1 ? 'months' : 'month')
+          .replace('PROJDATE', projDate)
+          .replace('STILL', stillNeeded);
+      }
+    } else {
+      bkLineEl.innerHTML = '';
+    }
+  }
+
+  const costEl = document.getElementById('bkCost');
+  if (idrInput && months > 0) {
+    const cost = (idrInput * months).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    costEl.textContent = cost;
+  } else if (months > 0) {
+    costEl.textContent = 'Enter IDR ↑';
+    costEl.style.fontSize = '14px';
+  } else {
+    costEl.textContent = '—';
+  }
+
+  const eligEl = document.getElementById('bkEligibility');
+  if (months === 0) {
+    eligEl.className = 'buyback-eligibility';
+    eligEl.innerHTML = '';
+    return;
+  }
+
+  if (newTotal >= 120) {
+    eligEl.className = 'buyback-eligibility eligible';
+    const breakdown = trailingP > 0
+      ? `${currentQ} qualifying + ${months} buyback + ${trailingP} pending = ${newTotal}`
+      : `${currentQ} qualifying + ${months} buyback = ${newTotal}`;
+    eligEl.innerHTML = `<strong>✅ Likely Eligible for Buyback</strong>
+      ${breakdown} qualifying payments — at or above the 120 required.
+      ${idrInput ? `Estimated lump sum: <strong>${(idrInput * months).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}</strong> (${months} × $${idrInput.toFixed(0)}/mo IDR payment).` : ''}
+      <br><br>Key requirements: you must have had qualifying employment during these months, your loans must still have an outstanding balance, and you must have 120 months of certified qualifying employment. Submit a reconsideration request to your servicer with the phrase: <em>"I have at least 120 months of approved qualifying employment, and I am seeking PSLF or TEPSLF discharge through PSLF buyback."</em>`;
+  } else {
+    const gap = 120 - newTotal;
+    const breakdown = trailingP > 0
+      ? `${currentQ} qualifying + ${months} buyback + ${trailingP} pending = ${newTotal}`
+      : `${currentQ} qualifying + ${months} buyback = ${newTotal}`;
+    eligEl.className = 'buyback-eligibility not-eligible';
+    eligEl.innerHTML = `<strong>❌ Not Yet Eligible — ${gap} more needed</strong>
+      Buyback only works if it gets you to exactly 120 qualifying payments. With ${breakdown}, you'd still be ${gap} short.
+      Consider selecting ${gap} more non-qualifying months, or combine with your pending certification payments.`;
+  }
+}
+
+function showTip(e, p) {
+  const tt = document.getElementById('tooltip');
+  document.getElementById('tt-date').textContent = p.period;
+  document.getElementById('tt-loan').textContent = p.loan;
+  const statusEl = document.getElementById('tt-status');
+  const labels = { qualifying: '✅ Qualifying', 'non-qualifying': '❌ Non-Qualifying', pending: '⏳ Pending Certification' };
+  const cls = { qualifying: 'q', 'non-qualifying': 'nq', pending: 'p' };
+  statusEl.textContent = labels[p.status] || p.status;
+  statusEl.className = 'tooltip-status ' + (cls[p.status] || '');
+  const detailsEl = document.getElementById('tt-details');
+  const reason = (p.details || '').trim();
+  if (reason && p.status !== 'qualifying') {
+    detailsEl.textContent = reason;
+    detailsEl.className = 'tooltip-details visible';
+  } else {
+    detailsEl.className = 'tooltip-details';
+  }
+  tt.style.display = 'block';
+  moveTip(e);
+}
+
+function moveTip(e) {
+  const tt = document.getElementById('tooltip');
+  let x = e.clientX + 14, y = e.clientY - 10;
+  if (x + 230 > window.innerWidth) x = e.clientX - 240;
+  if (y + 80 > window.innerHeight) y = e.clientY - 90;
+  tt.style.left = x + 'px';
+  tt.style.top = y + 'px';
+}
+
+function hideTip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+// ─── NAV ──────────────────────────────────────────────────────────────────────
+
+function navTo(secId) {
+  const el = document.getElementById(secId);
+  if (!el) return;
+  const navH = document.getElementById('stickyNav').offsetHeight;
+  const top = el.getBoundingClientRect().top + window.scrollY - navH - 12;
+  window.scrollTo({ top, behavior: 'smooth' });
+  setActiveNav(secId);
+}
+
+function setActiveNav(secId) {
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.sec === secId);
+  });
+}
+
+(function() {
+  const SECS = ['sec-scraper','sec-import','sec-overview','sec-journey','sec-buyback','sec-detail','sec-export'];
+  let ticking = false;
+  window.addEventListener('scroll', function() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function() {
+      const navH = (document.getElementById('stickyNav') || {offsetHeight:0}).offsetHeight;
+      let current = SECS[0];
+      SECS.forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top <= navH + 40) current = id;
+      });
+      setActiveNav(current);
+      ticking = false;
+    });
+  }, { passive: true });
+})();
+
+
+// ─── MULTI-METHOD IMPORT ──────────────────────────────────────────────────────
+
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.import-tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.import-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Mobile text parser ────────────────────────────────────────────────────────
+// Parses raw copied text from the studentaid.gov PSLF payment history page.
+// The page text looks like repeating blocks of:
+//   [Loan name]
+//   [MM/YYYY]
+//   Qualifying | Non-Qualifying | Pending Certification
+//   [optional detail text]
+function parseMobileText(raw) {
+  const lines = raw.split(/\n/).map(l => l.trim()).filter(Boolean);
+  const results = [];
+  const seen = new Set();
+
+  // Patterns
+  const periodRe = /^(\d{1,2})\/( ?\d{4})$/;
+  const statusMap = {
+    qualifying: 'qualifying',
+    'non-qualifying': 'non-qualifying',
+    'nonqualifying': 'non-qualifying',
+    'not qualifying': 'non-qualifying',
+    'pending': 'pending',
+    'pending certification': 'pending',
+  };
+
+  // Find all period lines and work outward to get loan + status
+  for (let i = 0; i < lines.length; i++) {
+    const periodMatch = lines[i].match(/^(\d{1,2})\/\d{4}$/);
+    if (!periodMatch) continue;
+    const period = lines[i];
+
+    // Look backward for loan name (non-status, non-period line before this)
+    let loan = '';
+    for (let j = i - 1; j >= Math.max(0, i - 4); j--) {
+      const l = lines[j].toLowerCase();
+      const isStatus = Object.keys(statusMap).some(k => l.includes(k));
+      const isPeriod = /^\d{1,2}\/\d{4}$/.test(lines[j]);
+      if (!isStatus && !isPeriod && lines[j].length > 3) {
+        loan = lines[j];
+        break;
+      }
+    }
+
+    // Look forward for status
+    let status = '';
+    let details = '';
+    for (let j = i + 1; j < Math.min(lines.length, i + 5); j++) {
+      const l = lines[j].toLowerCase().trim();
+      for (const [k, v] of Object.entries(statusMap)) {
+        if (l.includes(k)) { status = v; break; }
+      }
+      if (status) {
+        // Next line after status might be details
+        if (j + 1 < lines.length) {
+          const next = lines[j + 1];
+          const nextLower = next.toLowerCase();
+          const isNextStatus = Object.keys(statusMap).some(k => nextLower.includes(k));
+          const isNextPeriod = /^\d{1,2}\/\d{4}$/.test(next);
+          if (!isNextStatus && !isNextPeriod && next.length > 4 && next.length < 200) {
+            details = next;
+          }
+        }
+        break;
+      }
+    }
+
+    if (!status) status = 'pending'; // default if unclear
+    if (!loan) loan = 'Unknown Loan';
+
+    const key = loan + '||' + period;
+    if (!seen.has(key)) {
+      seen.add(key);
+      results.push({ loan, period, status, details });
+    }
+  }
+  return results;
+}
+
+function loadMobileText(merge) {
+  const raw = document.getElementById('mobileInput').value.trim();
+  const errEl = document.getElementById('mobileError');
+  const okEl = document.getElementById('mobileSuccess');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+
+  if (!raw) { errEl.textContent = 'Please paste some text first.'; errEl.style.display = 'block'; return; }
+
+  const parsed = parseMobileText(raw);
+  if (!parsed.length) {
+    errEl.textContent = 'Could not find any payment records in the pasted text. Make sure you copied from the PSLF Payment History page and try again.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  if (merge && allPayments.length > 0) {
+    const existing = new Set(allPayments.map(p => p.loan + '||' + p.period));
+    let added = 0;
+    parsed.forEach(p => {
+      const k = p.loan + '||' + p.period;
+      if (!existing.has(k)) { allPayments.push(p); added++; }
+    });
+    okEl.textContent = `Merged: ${added} new payments added (${parsed.length - added} duplicates skipped). Total: ${allPayments.length}.`;
+    okEl.style.display = 'block';
+    document.getElementById('mobileInput').value = '';
+    renderDashboard();
+  } else {
+    allPayments = parsed;
+    okEl.textContent = `Loaded ${parsed.length} payments from pasted text.`;
+    okEl.style.display = 'block';
+    document.getElementById('mobileInput').value = '';
+    renderDashboard();
+
+  }
+}
+
+// ── File upload / drop ────────────────────────────────────────────────────────
+function handleFileDrop(evt) {
+  evt.preventDefault();
+  document.getElementById('dropZone').classList.remove('dragover');
+  const file = evt.dataTransfer.files[0];
+  if (file) processUploadedFile(file);
+}
+
+function handleFileSelect(evt) {
+  const file = evt.target.files[0];
+  if (file) processUploadedFile(file);
+  evt.target.value = '';
+}
+
+function processUploadedFile(file) {
+  const errEl = document.getElementById('fileError');
+  const okEl = document.getElementById('fileSuccess');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    let parsed = [];
+    let fmt = '';
+
+    try {
+      // Try JSON first
+      const json = JSON.parse(text);
+      if (Array.isArray(json) && json[0] && json[0].period) {
+        parsed = json;
+        fmt = 'JSON';
+      } else {
+        throw new Error('Not tracker JSON');
+      }
+    } catch (_) {
+      // Try CSV
+      try {
+        parsed = parseCSV(text);
+        fmt = 'CSV';
+      } catch (csvErr) {
+        errEl.textContent = 'Could not parse file: ' + csvErr.message;
+        errEl.style.display = 'block';
+        return;
+      }
+    }
+
+    if (!parsed.length) {
+      errEl.textContent = 'File parsed but contained no payment records.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    allPayments = parsed;
+    okEl.textContent = `Loaded ${parsed.length} payments from ${fmt} file: ${file.name}`;
+    okEl.style.display = 'block';
+    renderDashboard();
+
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) throw new Error('File has fewer than 2 rows');
+
+  // Detect delimiter
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+
+  const headers = lines[0].split(delim).map(h => h.trim().toLowerCase().replace(/['"]/g,''));
+
+  // Map header indices flexibly
+  const idx = (candidates) => {
+    for (const c of candidates) {
+      const i = headers.indexOf(c);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const loanIdx    = idx(['loan','loan name','loanname','loan_name']);
+  const periodIdx  = idx(['period','payment period','date','month']);
+  const statusIdx  = idx(['status','payment status','qualifying status']);
+  const detailsIdx = idx(['details','detail','reason','notes']);
+
+  if (periodIdx < 0) throw new Error('Could not find a "period" column. Expected columns: loan, period, status, details');
+  if (statusIdx < 0) throw new Error('Could not find a "status" column. Expected columns: loan, period, status, details');
+
+  const results = [];
+  const seen = new Set();
+  const statusMap = {
+    'qualifying': 'qualifying', 'yes': 'qualifying', 'q': 'qualifying',
+    'non-qualifying': 'non-qualifying', 'nonqualifying': 'non-qualifying',
+    'not qualifying': 'non-qualifying', 'no': 'non-qualifying', 'nq': 'non-qualifying',
+    'pending': 'pending', 'pending certification': 'pending', 'p': 'pending',
+  };
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i], delim);
+    const period = cols[periodIdx] ? cols[periodIdx].replace(/['"]/g,'').trim() : '';
+    if (!period || !/\d{1,2}\/\d{4}/.test(period)) continue;
+    const loan = loanIdx >= 0 ? (cols[loanIdx]||'').replace(/['"]/g,'').trim() : 'Imported Loan';
+    const rawStatus = (cols[statusIdx]||'').replace(/['"]/g,'').trim().toLowerCase();
+    const status = statusMap[rawStatus] || 'pending';
+    const details = detailsIdx >= 0 ? (cols[detailsIdx]||'').replace(/['"]/g,'').trim() : '';
+    const key = loan + '||' + period;
+    if (!seen.has(key)) { seen.add(key); results.push({ loan, period, status, details }); }
+  }
+  return results;
+}
+
+function splitCSVLine(line, delim) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQ = !inQ; }
+    else if (ch === delim && !inQ) { result.push(cur); cur = ''; }
+    else { cur += ch; }
+  }
+  result.push(cur);
+  return result;
+}
+
+function downloadCSVTemplate() {
+  const header = 'loan,period,status,details';
+  const rows = [
+    '"Direct Subsidized Loan","01/2020","qualifying",""',
+    '"Direct Subsidized Loan","02/2020","non-qualifying","Administrative Forbearance"',
+    '"Direct Subsidized Loan","03/2020","pending",""',
+  ];
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'pslf-template.csv';
+  a.click();
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+
+function toggleExportOpt(cb, labelId) {
+  document.getElementById(labelId).classList.toggle('checked', cb.checked);
+}
+
+function downloadJSON() {
+  if (!allPayments.length) { alert('No data loaded.'); return; }
+  const blob = new Blob([JSON.stringify(allPayments, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'pslf-payments-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+}
+
+function getOpt(id) {
+  const el = document.getElementById(id);
+  return el ? el.querySelector('input').checked : false;
+}
+
+function printReport() {
+  if (!allPayments.length) { alert('No data loaded.'); return; }
+
+  const printEl = document.getElementById('printArea');
+  const payments = dedup(getFiltered());
+  const qCount = payments.filter(p => p.status === 'qualifying').length;
+  const nqCount = payments.filter(p => p.status === 'non-qualifying').length;
+  const pCount = payments.filter(p => p.status === 'pending').length;
+  const remaining = Math.max(0, 120 - qCount);
+  const trailingP = calcTrailingPending(payments);
+
+  // Projection dates
+  const latestAnchor = payments[payments.length - 1];
+  const anchorDate = latestAnchor ? parseDate(latestAnchor.period) : null;
+  function proj(n) {
+    if (!anchorDate) return '—';
+    const d = new Date(anchorDate); d.setMonth(d.getMonth() + n);
+    return MONTHS_SHORT[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  const estConservative = qCount >= 120 ? 'Complete!' : (anchorDate ? proj(remaining) : '—');
+  const optQ = qCount + trailingP;
+  const estOptimistic = (trailingP > 0)
+    ? (optQ >= 120 ? 'Complete if certified!' : proj(Math.max(0, 120 - optQ)))
+    : null;
+
+  // Buyback projection
+  const selectedPeriods = new Set([...buybackSelected].map(k => k.split('||')[0]));
+  const bkMonths = selectedPeriods.size;
+  const bkNewTotal = qCount + bkMonths;
+  const bkStillNeeded = Math.max(0, 120 - bkNewTotal);
+  const estBuyback = (bkMonths > 0 && anchorDate)
+    ? (bkStillNeeded === 0 ? 'Eligible now if approved!' : proj(bkStillNeeded))
+    : null;
+
+  let html = `
+    <div class="print-header">
+      <h1>PSLF Payment Tracker — Export</h1>
+      <p>Generated ${new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'})}
+         &nbsp;·&nbsp; ${allPayments.length} total payments across ${[...new Set(allPayments.map(p=>p.loan))].length} loan(s)</p>
+    </div>`;
+
+  // Overview stats
+  if (getOpt('optOverview')) {
+    html += `<div class="print-section">
+      <h2>Overview</h2>
+      <div class="print-stat-row">
+        <div class="print-stat"><div class="print-stat-label">Qualifying</div><div class="print-stat-value" style="color:#10b981">${qCount}</div><div class="print-stat-sub">of 120 needed</div></div>
+        <div class="print-stat"><div class="print-stat-label">Non-Qualifying</div><div class="print-stat-value" style="color:#ef4444">${nqCount}</div><div class="print-stat-sub">payments</div></div>
+        <div class="print-stat"><div class="print-stat-label">Pending Cert.</div><div class="print-stat-value" style="color:#f59e0b">${pCount}</div><div class="print-stat-sub">not yet certified</div></div>
+        <div class="print-stat"><div class="print-stat-label">Remaining</div><div class="print-stat-value" style="color:#0284c7">${remaining}</div><div class="print-stat-sub">to forgiveness</div></div>
+      </div>
+    </div>`;
+  }
+
+  // Projections
+  const showCons = getOpt('optConservative');
+  const showOpt = getOpt('optOptimistic');
+  const showBk = getOpt('optBuyback');
+  if (showCons || showOpt || showBk) {
+    html += `<div class="print-section"><h2>Projections</h2><div class="print-proj">`;
+    if (showCons) html += `<strong>📅 Conservative:</strong> ${estConservative} &nbsp;·&nbsp; ${remaining} qualifying payments still needed<br>`;
+    if (showOpt && estOptimistic) html += `<strong>✨ If Pending Certified:</strong> ${estOptimistic} &nbsp;·&nbsp; ${trailingP} trailing pending would count<br>`;
+    if (showBk && estBuyback) html += `<strong>🔄 With Buyback (${bkMonths} month${bkMonths!==1?'s':''}):</strong> ${estBuyback} &nbsp;·&nbsp; ${bkStillNeeded} still needed after buyback`;
+    html += `</div></div>`;
+  }
+
+  // Payment grid
+  if (getOpt('optGrid')) {
+    const firstDate = parseDate(payments[0].period);
+    const startYear = firstDate ? firstDate.getFullYear() : new Date().getFullYear();
+    const now = new Date();
+    const endYear = Math.max(now.getFullYear() + 1, startYear + 10);
+    const map = {};
+    payments.forEach(p => {
+      const d = parseDate(p.period);
+      if (d) map[d.getFullYear() + '-' + (d.getMonth()+1)] = p;
+    });
+
+    let gridHtml = `<div class="print-section"><h2>120-Payment Journey</h2><div class="print-grid-wrap">`;
+    gridHtml += `<div class="print-month-header">`;
+    MONTHS_SHORT.forEach(m => { gridHtml += `<span>${m}</span>`; });
+    gridHtml += `</div>`;
+
+    for (let yr = startYear; yr <= endYear; yr++) {
+      gridHtml += `<div class="print-year-row"><div class="print-year-label">${yr}</div><div class="print-year-cells">`;
+      for (let mo = 1; mo <= 12; mo++) {
+        const isFuture = new Date(yr, mo-1, 1) > now;
+        const p = map[yr+'-'+mo];
+        const isBk = p && p.status === 'non-qualifying' && buybackSelected.has(p.period+'||'+p.loan);
+        let cls = 'fut';
+        if (!isFuture) {
+          if (isBk) cls = 'bk';
+          else if (p) cls = p.status === 'qualifying' ? 'q' : p.status === 'pending' ? 'pend' : 'nq';
+          else cls = 'nq';
+        }
+        gridHtml += `<div class="print-cell ${cls}"></div>`;
+      }
+      gridHtml += `</div></div>`;
+    }
+    gridHtml += `<div class="print-legend">
+      <div class="print-legend-item"><div class="print-legend-dot" style="background:#10b981"></div>Qualifying</div>
+      <div class="print-legend-item"><div class="print-legend-dot" style="background:#f59e0b"></div>Pending</div>
+      <div class="print-legend-item"><div class="print-legend-dot" style="background:#ef4444;opacity:0.6"></div>Non-Qualifying</div>
+      <div class="print-legend-item"><div class="print-legend-dot" style="background:#3b82f6"></div>Buyback Selected</div>
+      <div class="print-legend-item"><div class="print-legend-dot" style="background:#e5e7eb"></div>Future</div>
+    </div></div></div>`;
+    html += gridHtml;
+  }
+
+  // Payment detail table
+  if (getOpt('optTable')) {
+    const sorted = [...payments].sort((a,b) => parseDate(b.period) - parseDate(a.period));
+    const allSorted2 = [...payments].sort((a,b) => parseDate(a.period) - parseDate(b.period));
+    const qMap = {}; let qr = 0; const seenP = new Set();
+    allSorted2.forEach(p => {
+      if (!seenP.has(p.period)) {
+        seenP.add(p.period);
+        if (p.status === 'qualifying') qr++;
+        qMap[p.period] = qr;
+      }
+    });
+
+    html += `<div class="print-section"><h2>Payment Detail (${sorted.length} payments)</h2>
+      <table class="print-table"><thead><tr>
+        <th>#</th><th>Period</th><th>Loan</th><th>Status</th><th>Details</th>
+      </tr></thead><tbody>`;
+    sorted.forEach((p, i) => {
+      const badge = p.status === 'qualifying'
+        ? `<span class="print-badge q">Qualifying${qMap[p.period]?' #'+qMap[p.period]:''}</span>`
+        : p.status === 'pending'
+          ? `<span class="print-badge pend">Pending</span>`
+          : `<span class="print-badge nq">Non-Qualifying</span>`;
+      html += `<tr><td>${i+1}</td><td>${p.period}</td><td>${p.loan}</td><td>${badge}</td><td>${p.details||'—'}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+
+  printEl.innerHTML = html;
+  printEl.style.display = 'block';
+  window.print();
+  printEl.style.display = 'none';
+}
+
+
+</script>
+</body>
+</html>
